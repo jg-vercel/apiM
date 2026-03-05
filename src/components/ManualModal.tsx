@@ -32,7 +32,7 @@ const MANUAL_STEPS: ManualStep[] = [
         image: "/manual/02_create_modal.png",
         tips: [
             "Method: GET, POST, PUT, DELETE, PATCH 선택 가능",
-            "경로: /api/mock/ 뒤에 원하는 경로 입력",
+            "경로: /api/ 뒤에 원하는 경로 입력",
             "소스 유형: TypeScript, Java Class, DDL, 수동 등록 중 선택",
             "배열 응답 체크 시 여러 건의 데이터가 배열로 응답됩니다",
             "래퍼 응답 체크 시 items + 페이지네이션 구조로 응답됩니다",

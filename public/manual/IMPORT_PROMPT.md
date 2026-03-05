@@ -35,7 +35,7 @@
   "endpoints": [
     {
       "method": "GET | POST | PUT | DELETE | PATCH",
-      "path": "/api/mock/경로",
+      "path": "/api/경로",
       "description": "API 설명 (한글)",
       "sourceType": "typescript",
       "sourceCode": "원본 타입/인터페이스 코드 (있을 경우)",
@@ -162,7 +162,7 @@ object나 array 타입의 경우 `children` 배열에 하위 필드를 정의:
 ```json
 {
   "method": "GET",
-  "path": "/api/mock/users",
+  "path": "/api/users",
   "description": "사용자 목록 (페이지네이션)",
   "useWrapper": true,
   "isArray": true,
@@ -193,9 +193,9 @@ object나 array 타입의 경우 `children` 배열에 하위 필드를 정의:
 
 ## 분석 및 생성 규칙
 
-1. **path는 `/api/mock/`으로 시작**해야 합니다
-   - 원본이 `/api/v1/users`이면 → `/api/mock/users`로 변환
-   - 원본이 `/cameras/list`이면 → `/api/mock/cameras/list`로 변환
+1. **path는 `/api/`으로 시작**해야 합니다
+   - 원본이 `/api/v1/users`이면 → `/api/users`로 변환
+   - 원본이 `/cameras/list`이면 → `/api/cameras/list`로 변환
 
 2. **필드명은 실제 API 응답의 필드명**을 그대로 사용하세요
 
@@ -241,7 +241,7 @@ object나 array 타입의 경우 `children` 배열에 하위 필드를 정의:
   "endpoints": [
     {
       "method": "GET",
-      "path": "/api/mock/cameras",
+      "path": "/api/cameras",
       "description": "CCTV 카메라 목록 조회",
       "sourceType": "manual",
       "sourceCode": "",
@@ -270,7 +270,7 @@ object나 array 타입의 경우 `children` 배열에 하위 필드를 정의:
     },
     {
       "method": "POST",
-      "path": "/api/mock/cameras",
+      "path": "/api/cameras",
       "description": "카메라 등록",
       "sourceType": "manual",
       "sourceCode": "",

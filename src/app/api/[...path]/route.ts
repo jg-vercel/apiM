@@ -8,7 +8,7 @@ async function handleMock(
     { params }: { params: Promise<{ path: string[] }> }
 ) {
     const { path } = await params;
-    const mockPath = "/api/mock/" + path.join("/");
+    const mockPath = "/api/" + path.join("/");
     const method = request.method as HttpMethod;
 
     const endpoint = store.findByPath(method, mockPath);

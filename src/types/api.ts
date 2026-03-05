@@ -60,7 +60,7 @@ export interface WrapperField {
 export interface MockApiEndpoint {
   id: string;
   method: HttpMethod;
-  path: string;           // 예: /api/mock/cameras
+  path: string;           // 예: /api/cameras
   description: string;
   sourceType: SourceType;
   sourceCode: string;      // 원본 코드 (TS Type, Java Class, DDL 등)

@@ -129,7 +129,7 @@ export default function CreateEndpointModal({ endpoint, onClose, onCreate, onUpd
 
     const [activeTab, setActiveTab] = useState<"source" | "fields" | "template" | "wrapper">("source");
     const [method, setMethod] = useState<HttpMethod>(endpoint?.method || "GET");
-    const [path, setPath] = useState(endpoint?.path || "/api/mock/");
+    const [path, setPath] = useState(endpoint?.path || "/api/");
     const [description, setDescription] = useState(endpoint?.description || "");
     const [sourceType, setSourceType] = useState<SourceType>(endpoint?.sourceType || "typescript");
     const [sourceCode, setSourceCode] = useState(endpoint?.sourceCode || "");
@@ -303,7 +303,7 @@ export default function CreateEndpointModal({ endpoint, onClose, onCreate, onUpd
                                 value={path}
                                 onChange={(e) => setPath(e.target.value)}
                                 className="input-dark font-mono text-sm"
-                                placeholder="/api/mock/your-endpoint"
+                                placeholder="/api/your-endpoint"
                             />
                         </div>
                         <div className="flex gap-3">

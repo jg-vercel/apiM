@@ -161,7 +161,7 @@ export default function ImportModal({ onClose, onImported }: Props) {
   "endpoints": [
     {
       "method": "GET",
-      "path": "/api/mock/example",
+      "path": "/api/example",
       "fields": [...]
     }
   ]

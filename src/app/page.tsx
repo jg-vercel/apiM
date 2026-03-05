@@ -1,65 +1,392 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { MockApiEndpoint, HttpMethod, SourceType, FieldDefinition, WrapperField } from "@/types/api";
+import EndpointList from "@/components/EndpointList";
+import CreateEndpointModal from "@/components/CreateEndpointModal";
+import PreviewPanel from "@/components/PreviewPanel";
+import ImportModal from "@/components/ImportModal";
+import ManualModal from "@/components/ManualModal";
 
 export default function Home() {
+  const [endpoints, setEndpoints] = useState<MockApiEndpoint[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingEndpoint, setEditingEndpoint] = useState<MockApiEndpoint | null>(null);
+  const [previewEndpoint, setPreviewEndpoint] = useState<MockApiEndpoint | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleExportClipboard = async () => {
+    try {
+      const res = await fetch("/api/endpoints/export");
+      const data = await res.json();
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      showToast(`${data.endpoints.length}개 API 설정이 클립보드에 복사되었습니다`);
+    } catch {
+      showToast("클립보드 복사에 실패했습니다", "error");
+    }
+  };
+
+  const handleExportFile = async () => {
+    try {
+      const res = await fetch("/api/endpoints/export");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mock-api-config-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`${data.endpoints.length}개 API 설정이 파일로 저장되었습니다`);
+    } catch {
+      showToast("파일 저장에 실패했습니다", "error");
+    }
+  };
+
+  const fetchEndpoints = useCallback(async () => {
+    try {
+      const res = await fetch("/api/endpoints");
+      const data = await res.json();
+      setEndpoints(data);
+    } catch (error) {
+      console.error("Failed to fetch endpoints:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEndpoints();
+  }, [fetchEndpoints]);
+
+  const handleCreate = async (data: {
+    method: HttpMethod;
+    path: string;
+    description: string;
+    sourceType: SourceType;
+    sourceCode: string;
+    fields: FieldDefinition[];
+    responseTemplate: string;
+    isArray: boolean;
+    arrayCount: number;
+    statusCode: number;
+    useWrapper: boolean;
+    wrapperFields: WrapperField[];
+    itemsFieldName: string;
+  }) => {
+    try {
+      const res = await fetch("/api/endpoints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        await fetchEndpoints();
+        setShowCreate(false);
+      }
+    } catch (error) {
+      console.error("Failed to create endpoint:", error);
+    }
+  };
+
+  const handleUpdate = async (id: string, data: Partial<MockApiEndpoint>) => {
+    try {
+      const res = await fetch(`/api/endpoints/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        await fetchEndpoints();
+        setEditingEndpoint(null);
+      }
+    } catch (error) {
+      console.error("Failed to update endpoint:", error);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await fetch(`/api/endpoints/${deleteTargetId}`, { method: "DELETE" });
+      await fetchEndpoints();
+      if (previewEndpoint?.id === deleteTargetId) setPreviewEndpoint(null);
+    } catch (error) {
+      console.error("Failed to delete endpoint:", error);
+    } finally {
+      setDeleteTargetId(null);
+    }
+  };
+
+  const handleToggle = async (id: string) => {
+    try {
+      await fetch(`/api/endpoints/${id}/toggle`, { method: "PATCH" });
+      await fetchEndpoints();
+    } catch (error) {
+      console.error("Failed to toggle endpoint:", error);
+    }
+  };
+
+  const deleteTarget = deleteTargetId
+    ? endpoints.find((ep) => ep.id === deleteTargetId)
+    : null;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-grid">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-[var(--color-dark-600)]" style={{ background: "rgba(10, 11, 15, 0.85)", backdropFilter: "blur(20px)" }}>
+        <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-accent-blue)] to-[var(--color-accent-purple)] flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Mock API Studio</h1>
+              <p className="text-xs text-[var(--color-dark-300)]">더미 API 생성기 · 응답을 즉시 만들어 테스트하세요</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* 매뉴얼 */}
+            <button
+              onClick={() => setShowManual(true)}
+              className="btn-icon"
+              title="사용 매뉴얼"
+              style={{ width: 36, height: 36 }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+              </svg>
+            </button>
+
+            <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-dark-700)] border border-[var(--color-dark-500)] text-xs text-[var(--color-dark-300)]">
+              <span className="status-dot active"></span>
+              <span>{endpoints.filter(e => e.enabled).length}개 활성</span>
+              <span className="mx-1 text-[var(--color-dark-500)]">|</span>
+              <span>{endpoints.length}개 전체</span>
+            </div>
+
+            {/* 가져오기 */}
+            <button
+              onClick={() => setShowImport(true)}
+              className="btn-icon"
+              title="설정 가져오기"
+              style={{ width: 36, height: 36 }}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+
+            {/* 내보내기 드롭다운 */}
+            <div className="relative group">
+              <button
+                className="btn-icon"
+                title="설정 내보내기"
+                style={{ width: 36, height: 36 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </button>
+              <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[var(--color-dark-500)] py-1 hidden group-hover:block" style={{ background: "var(--color-dark-700)", zIndex: 60 }}>
+                <button
+                  onClick={handleExportClipboard}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--color-dark-600)] transition-colors flex items-center gap-2"
+                >
+                  📋 클립보드에 복사
+                </button>
+                <button
+                  onClick={handleExportFile}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--color-dark-600)] transition-colors flex items-center gap-2"
+                >
+                  💾 파일로 저장
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setEditingEndpoint(null);
+                setShowCreate(true);
+              }}
+              className="btn-primary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              새 API 생성
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="flex gap-6" style={{ minHeight: "calc(100vh - 100px)" }}>
+          {/* Left: Endpoint List */}
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="spinner"></div>
+              </div>
+            ) : (
+              <EndpointList
+                endpoints={endpoints}
+                onEdit={(ep) => {
+                  setEditingEndpoint(ep);
+                  setShowCreate(true);
+                }}
+                onDelete={handleDelete}
+                onToggle={handleToggle}
+                onPreview={setPreviewEndpoint}
+                selectedId={previewEndpoint?.id}
+              />
+            )}
+          </div>
+
+          {/* Right: Preview Panel */}
+          {previewEndpoint && (
+            <div className="w-[480px] shrink-0 hidden lg:block">
+              <PreviewPanel endpoint={previewEndpoint} />
+            </div>
+          )}
         </div>
       </main>
+
+      {/* Create/Edit Modal */}
+      {showCreate && (
+        <CreateEndpointModal
+          endpoint={editingEndpoint}
+          onClose={() => {
+            setShowCreate(false);
+            setEditingEndpoint(null);
+          }}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTargetId && (
+        <div
+          className="modal-overlay"
+          onClick={() => setDeleteTargetId(null)}
+          style={{ zIndex: 100 }}
+        >
+          <div
+            className="glass-card p-6 max-w-[400px] w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+            style={{ animation: "fadeIn 0.15s ease-out" }}
+          >
+            <div className="flex items-start gap-4 mb-5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(239, 68, 68, 0.12)" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold mb-1">API 삭제</h3>
+                <p className="text-sm text-[var(--color-dark-300)]">
+                  이 API를 삭제하시겠습니까?
+                </p>
+                {deleteTarget && (
+                  <div className="mt-2 px-3 py-2 rounded-lg bg-[var(--color-dark-700)] border border-[var(--color-dark-500)]">
+                    <code className="text-xs text-[var(--color-accent-cyan)] font-mono">
+                      {deleteTarget.method} {deleteTarget.path}
+                    </code>
+                  </div>
+                )}
+                <p className="text-xs text-[var(--color-dark-400)] mt-2">
+                  이 작업은 되돌릴 수 없습니다.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDeleteTargetId(null)}
+                className="btn-secondary"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                style={{
+                  background: "var(--color-accent-red)",
+                  color: "white",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => fetchEndpoints()}
+        />
+      )}
+
+      {/* Manual Modal */}
+      {showManual && (
+        <ManualModal onClose={() => setShowManual(false)} />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className="fixed bottom-6 right-6 px-5 py-3 rounded-xl text-sm font-medium shadow-2xl flex items-center gap-2"
+          style={{
+            zIndex: 200,
+            animation: "fadeIn 0.2s ease-out",
+            background: toast.type === "success"
+              ? "linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.9))"
+              : "linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(220, 38, 38, 0.9))",
+            color: "white",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          {toast.type === "success" ? "✅" : "❌"} {toast.message}
+        </div>
+      )}
     </div>
   );
 }

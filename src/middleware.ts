@@ -9,7 +9,7 @@ export function middleware(request: NextRequest) {
         pathname === "/" ||
         pathname.startsWith("/_next") ||
         pathname.startsWith("/api/endpoints") ||
-        pathname.startsWith("/api/_mock") ||
+        pathname.startsWith("/api/mock") ||
         pathname.startsWith("/manual") ||
         pathname.match(/\.\w+$/) // 정적 파일 (.ico, .png, .css, .js 등)
     ) {
@@ -18,7 +18,7 @@ export function middleware(request: NextRequest) {
 
     // 나머지 모든 경로는 Mock 핸들러로 리라이트
     const url = request.nextUrl.clone();
-    url.pathname = "/api/_mock";
+    url.pathname = "/api/mock";
     url.searchParams.set("_mockPath", pathname);
     return NextResponse.rewrite(url);
 }

@@ -3,14 +3,17 @@ import { store } from "@/lib/store";
 import { generateResponse } from "@/lib/generator";
 import { HttpMethod } from "@/types/api";
 
-async function handleMock(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    const mockPath = "/api/" + path.join("/");
-    const method = request.method as HttpMethod;
+async function handleMock(request: NextRequest) {
+    const mockPath = request.nextUrl.searchParams.get("_mockPath");
 
+    if (!mockPath) {
+        return NextResponse.json(
+            { error: "경로가 지정되지 않았습니다." },
+            { status: 400 }
+        );
+    }
+
+    const method = request.method as HttpMethod;
     const endpoint = store.findByPath(method, mockPath);
 
     if (!endpoint) {

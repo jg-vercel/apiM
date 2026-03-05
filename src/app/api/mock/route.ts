@@ -4,7 +4,7 @@ import { generateResponse } from "@/lib/generator";
 import { HttpMethod } from "@/types/api";
 
 async function handleMock(request: NextRequest) {
-    const mockPath = request.nextUrl.searchParams.get("_mockPath");
+    const mockPath = request.headers.get("x-mock-path");
 
     if (!mockPath) {
         return NextResponse.json(

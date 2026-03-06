@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { store } from "@/lib/store";
+import { sessionManager } from "@/lib/store";
+import { getSessionIdFromRequest } from "@/lib/session";
 import { generateResponse } from "@/lib/generator";
 import { HttpMethod } from "@/types/api";
 
@@ -14,7 +15,13 @@ async function handleMock(request: NextRequest) {
     }
 
     const method = request.method as HttpMethod;
-    const endpoint = store.findByPath(method, mockPath);
+    const sessionId = getSessionIdFromRequest(request);
+
+    // 세션 쿠키가 있으면 해당 세션 스토어에서만 탐색,
+    // 없으면(크로스 오리진 요청 등) 전체 세션에서 탐색
+    const endpoint = sessionId
+        ? sessionManager.getStore(sessionId).findByPath(method, mockPath)
+        : sessionManager.findByPathAcrossAllSessions(method, mockPath);
 
     if (!endpoint) {
         return NextResponse.json(

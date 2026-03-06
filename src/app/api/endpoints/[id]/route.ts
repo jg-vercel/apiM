@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { store } from "@/lib/store";
+import { sessionManager } from "@/lib/store";
+import { getSessionId, setSessionCookie } from "@/lib/session";
 import { parseSourceCode } from "@/lib/parser";
 
 export async function GET(
@@ -7,11 +8,15 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
+    const sessionId = await getSessionId();
+    const store = sessionManager.getStore(sessionId);
     const endpoint = store.get(id);
     if (!endpoint) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json(endpoint);
+    const response = NextResponse.json(endpoint);
+    setSessionCookie(response, sessionId);
+    return response;
 }
 
 export async function PUT(
@@ -19,10 +24,11 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
+    const sessionId = await getSessionId();
+    const store = sessionManager.getStore(sessionId);
     try {
         const body = await request.json();
 
-        // 소스 코드가 변경되었으면 다시 파싱
         if (body.sourceCode && body.sourceType && body.sourceType !== "manual") {
             const result = parseSourceCode(body.sourceType, body.sourceCode);
             body.fields = result.fields;
@@ -32,7 +38,9 @@ export async function PUT(
         if (!updated) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
-        return NextResponse.json(updated);
+        const response = NextResponse.json(updated);
+        setSessionCookie(response, sessionId);
+        return response;
     } catch (error) {
         console.error("Error updating endpoint:", error);
         return NextResponse.json(
@@ -47,9 +55,13 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
+    const sessionId = await getSessionId();
+    const store = sessionManager.getStore(sessionId);
     const deleted = store.delete(id);
     if (!deleted) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true });
+    setSessionCookie(response, sessionId);
+    return response;
 }

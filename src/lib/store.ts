@@ -1,11 +1,11 @@
 import { MockApiEndpoint } from "@/types/api";
 
-/**
- * 서버 사이드 인메모리 스토어
- * (프로덕션에서는 DB 사용 권장)
- */
 class MockApiStore {
-    private endpoints: Map<string, MockApiEndpoint> = new Map();
+    private endpoints: Map<string, MockApiEndpoint>;
+
+    constructor(endpoints: Map<string, MockApiEndpoint>) {
+        this.endpoints = endpoints;
+    }
 
     getAll(): MockApiEndpoint[] {
         return Array.from(this.endpoints.values()).sort(
@@ -41,6 +41,22 @@ class MockApiStore {
         return this.endpoints.delete(id);
     }
 
+    deleteAll(): number {
+        const count = this.endpoints.size;
+        this.endpoints.clear();
+        return count;
+    }
+
+    deleteMany(ids: string[]): number {
+        let deleted = 0;
+        for (const id of ids) {
+            if (this.endpoints.delete(id)) {
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
     toggleEnabled(id: string): MockApiEndpoint | undefined {
         const ep = this.endpoints.get(id);
         if (!ep) return undefined;
@@ -51,13 +67,40 @@ class MockApiStore {
     }
 }
 
-// 싱글톤 인스턴스
-const globalStore = globalThis as typeof globalThis & {
-    __mockApiStore?: MockApiStore;
+/**
+ * globalThis에는 클래스 인스턴스 대신 원시 Map 데이터만 저장합니다.
+ * HMR로 클래스가 재정의되어도 항상 최신 메서드를 사용하면서 데이터는 유지됩니다.
+ */
+const g = globalThis as typeof globalThis & {
+    __mockApiStores?: Map<string, Map<string, MockApiEndpoint>>;
 };
 
-if (!globalStore.__mockApiStore) {
-    globalStore.__mockApiStore = new MockApiStore();
+if (!g.__mockApiStores) {
+    g.__mockApiStores = new Map();
 }
 
-export const store = globalStore.__mockApiStore;
+const rawStores = g.__mockApiStores;
+
+export const sessionManager = {
+    getStore(sessionId: string): MockApiStore {
+        let data = rawStores.get(sessionId);
+        if (!data) {
+            data = new Map();
+            rawStores.set(sessionId, data);
+        }
+        return new MockApiStore(data);
+    },
+
+    deleteStore(sessionId: string): boolean {
+        return rawStores.delete(sessionId);
+    },
+
+    findByPathAcrossAllSessions(method: string, path: string): MockApiEndpoint | undefined {
+        for (const data of rawStores.values()) {
+            const store = new MockApiStore(data);
+            const endpoint = store.findByPath(method, path);
+            if (endpoint) return endpoint;
+        }
+        return undefined;
+    },
+};

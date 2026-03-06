@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { store } from "@/lib/store";
+import { sessionManager } from "@/lib/store";
+import { getSessionId, setSessionCookie } from "@/lib/session";
 import { MockApiEndpoint } from "@/types/api";
 
 /**
@@ -8,6 +9,8 @@ import { MockApiEndpoint } from "@/types/api";
  */
 export async function POST(request: NextRequest) {
     try {
+        const sessionId = await getSessionId();
+        const store = sessionManager.getStore(sessionId);
         const body = await request.json();
 
         if (!body.endpoints || !Array.isArray(body.endpoints)) {
@@ -49,17 +52,19 @@ export async function POST(request: NextRequest) {
 
                 store.create(endpoint);
                 created.push(endpoint);
-            } catch (err) {
+            } catch {
                 errors.push(`${epData.path}: 등록 실패`);
             }
         }
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             created: created.length,
             errors,
             endpoints: created,
         });
+        setSessionCookie(response, sessionId);
+        return response;
     } catch (error) {
         console.error("Import error:", error);
         return NextResponse.json(

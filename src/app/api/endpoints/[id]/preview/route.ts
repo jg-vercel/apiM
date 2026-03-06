@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { store } from "@/lib/store";
+import { sessionManager } from "@/lib/store";
+import { getSessionId, setSessionCookie } from "@/lib/session";
 import { generateResponse } from "@/lib/generator";
 
 export async function GET(
@@ -7,6 +8,8 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
+    const sessionId = await getSessionId();
+    const store = sessionManager.getStore(sessionId);
     const endpoint = store.get(id);
     if (!endpoint) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -22,5 +25,7 @@ export async function GET(
         endpoint.itemsFieldName
     );
 
-    return NextResponse.json(data, { status: endpoint.statusCode });
+    const response = NextResponse.json(data, { status: endpoint.statusCode });
+    setSessionCookie(response, sessionId);
+    return response;
 }

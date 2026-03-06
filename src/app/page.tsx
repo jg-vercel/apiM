@@ -9,6 +9,16 @@ import ImportModal from "@/components/ImportModal";
 import ManualModal from "@/components/ManualModal";
 import PromptModal from "@/components/PromptModal";
 
+const STORAGE_KEY = "mock-api-endpoints";
+
+function saveToStorage(endpoints: MockApiEndpoint[]) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(endpoints));
+  } catch {
+    // sessionStorage 쓰기 실패 무시
+  }
+}
+
 export default function Home() {
   const [endpoints, setEndpoints] = useState<MockApiEndpoint[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -16,6 +26,8 @@ export default function Home() {
   const [previewEndpoint, setPreviewEndpoint] = useState<MockApiEndpoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  // null=미표시, []=전체삭제, [...ids]=선택삭제
+  const [bulkDeleteTarget, setBulkDeleteTarget] = useState<string[] | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -61,6 +73,7 @@ export default function Home() {
       const res = await fetch("/api/endpoints");
       const data = await res.json();
       setEndpoints(data);
+      saveToStorage(data);
     } catch (error) {
       console.error("Failed to fetch endpoints:", error);
     } finally {
@@ -68,7 +81,27 @@ export default function Home() {
     }
   }, []);
 
+  // 초기 로드: sessionStorage 우선, 없으면 서버에서 fetch
   useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed: MockApiEndpoint[] = JSON.parse(stored);
+        if (parsed.length > 0) {
+          setEndpoints(parsed);
+          setLoading(false);
+          // 서버 세션 복구 (백그라운드)
+          fetch("/api/endpoints/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoints: parsed }),
+          });
+          return;
+        }
+      }
+    } catch {
+      // 파싱 실패 시 서버에서 fetch
+    }
     fetchEndpoints();
   }, [fetchEndpoints]);
 
@@ -95,7 +128,10 @@ export default function Home() {
       });
 
       if (res.ok) {
-        await fetchEndpoints();
+        const newEndpoint: MockApiEndpoint = await res.json();
+        const updated = [newEndpoint, ...endpoints];
+        setEndpoints(updated);
+        saveToStorage(updated);
         setShowCreate(false);
       }
     } catch (error) {
@@ -112,7 +148,10 @@ export default function Home() {
       });
 
       if (res.ok) {
-        await fetchEndpoints();
+        const updatedEndpoint: MockApiEndpoint = await res.json();
+        const updated = endpoints.map((ep) => ep.id === id ? updatedEndpoint : ep);
+        setEndpoints(updated);
+        saveToStorage(updated);
         setEditingEndpoint(null);
       }
     } catch (error) {
@@ -128,7 +167,9 @@ export default function Home() {
     if (!deleteTargetId) return;
     try {
       await fetch(`/api/endpoints/${deleteTargetId}`, { method: "DELETE" });
-      await fetchEndpoints();
+      const updated = endpoints.filter((ep) => ep.id !== deleteTargetId);
+      setEndpoints(updated);
+      saveToStorage(updated);
       if (previewEndpoint?.id === deleteTargetId) setPreviewEndpoint(null);
     } catch (error) {
       console.error("Failed to delete endpoint:", error);
@@ -139,10 +180,46 @@ export default function Home() {
 
   const handleToggle = async (id: string) => {
     try {
-      await fetch(`/api/endpoints/${id}/toggle`, { method: "PATCH" });
-      await fetchEndpoints();
+      const res = await fetch(`/api/endpoints/${id}/toggle`, { method: "PATCH" });
+      if (res.ok) {
+        const toggled: MockApiEndpoint = await res.json();
+        const updated = endpoints.map((ep) => ep.id === id ? toggled : ep);
+        setEndpoints(updated);
+        saveToStorage(updated);
+      }
     } catch (error) {
       console.error("Failed to toggle endpoint:", error);
+    }
+  };
+
+  // ids=[] → 전체 삭제, ids=[...] → 선택 삭제
+  const handleBulkDelete = (ids: string[]) => {
+    setBulkDeleteTarget(ids);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (bulkDeleteTarget === null) return;
+    try {
+      const body = bulkDeleteTarget.length > 0
+        ? { ids: bulkDeleteTarget }
+        : {};
+      await fetch("/api/endpoints", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const updated = bulkDeleteTarget.length > 0
+        ? endpoints.filter((ep) => !bulkDeleteTarget.includes(ep.id))
+        : [];
+      setEndpoints(updated);
+      saveToStorage(updated);
+      if (previewEndpoint && (bulkDeleteTarget.length === 0 || bulkDeleteTarget.includes(previewEndpoint.id))) {
+        setPreviewEndpoint(null);
+      }
+    } catch (error) {
+      console.error("Failed to bulk delete:", error);
+    } finally {
+      setBulkDeleteTarget(null);
     }
   };
 
@@ -281,6 +358,7 @@ export default function Home() {
                   setShowCreate(true);
                 }}
                 onDelete={handleDelete}
+                onBulkDelete={handleBulkDelete}
                 onToggle={handleToggle}
                 onPreview={setPreviewEndpoint}
                 selectedId={previewEndpoint?.id}
@@ -310,7 +388,7 @@ export default function Home() {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (단건) */}
       {deleteTargetId && (
         <div
           className="modal-overlay"
@@ -369,6 +447,66 @@ export default function Home() {
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteTarget !== null && (
+        <div
+          className="modal-overlay"
+          onClick={() => setBulkDeleteTarget(null)}
+          style={{ zIndex: 100 }}
+        >
+          <div
+            className="glass-card p-6 max-w-[400px] w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+            style={{ animation: "fadeIn 0.15s ease-out" }}
+          >
+            <div className="flex items-start gap-4 mb-5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(239, 68, 68, 0.12)" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold mb-1">일괄 삭제</h3>
+                <p className="text-sm text-[var(--color-dark-300)]">
+                  {bulkDeleteTarget.length === 0
+                    ? `전체 ${endpoints.length}개 API를 모두 삭제하시겠습니까?`
+                    : `선택한 ${bulkDeleteTarget.length}개 API를 삭제하시겠습니까?`}
+                </p>
+                <p className="text-xs text-[var(--color-dark-400)] mt-2">
+                  이 작업은 되돌릴 수 없습니다.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setBulkDeleteTarget(null)}
+                className="btn-secondary"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmBulkDelete}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                style={{
+                  background: "var(--color-accent-red)",
+                  color: "white",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                {bulkDeleteTarget.length === 0 ? "전체 삭제" : `${bulkDeleteTarget.length}개 삭제`}
               </button>
             </div>
           </div>
